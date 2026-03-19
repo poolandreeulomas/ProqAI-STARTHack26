@@ -10,7 +10,7 @@ from urllib import error, request
 ROOT = Path(__file__).parent
 ENV_PATH = ROOT / ".env"
 POLICIES_PATH = ROOT / "data" / "data" / "policies.json"
-OUTPUT_PATH = ROOT / "data" / "data" / "clean_policies.json"
+OUTPUT_PATH = ROOT / "cleaned_policies.json"
 
 LIST_SECTIONS = [
     "approval_thresholds",

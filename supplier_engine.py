@@ -99,7 +99,7 @@ class SupplierEngine:
     def __init__(self, data_dir: Path = DATA_DIR):
         self.suppliers = _load_csv(data_dir / "suppliers.csv")
         self.pricing = _load_csv(data_dir / "pricing.csv")
-        self.policies = _load_json(data_dir / "cleaned_policies.json")
+        self.policies = _load_json(Path(__file__).parent / "cleaned_policies.json")
         self.awards = _load_csv(data_dir / "historical_awards.csv")
         self._today = date.today()
 
