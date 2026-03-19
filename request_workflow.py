@@ -322,11 +322,11 @@ class RequestWorkflowService:
         required_by_date = self._extract_required_date(message)
         preferred = self._find_supplier_name(message)
         return {
-            "category_l1": category["category_l1"],
-            "category_l2": category["category_l2"],
-            "title": f"{category['category_l2']} procurement request",
+            "category_l1": category["category_l1"] if category else None,
+            "category_l2": category["category_l2"] if category else None,
+            "title": f"{category['category_l2']} procurement request" if category else "Procurement request",
             "quantity": quantity,
-            "unit_of_measure": category["typical_unit"],
+            "unit_of_measure": category["typical_unit"] if category else None,
             "budget_amount": budget_amount,
             "currency": currency,
             "required_by_date": required_by_date,
@@ -355,7 +355,7 @@ class RequestWorkflowService:
         country = self._coerce_country(parsed.get("country"), parsed.get("site"), parsed.get("delivery_countries"), combined_message)
         currency = self._normalise_currency_value(parsed.get("currency")) or CURRENCY_BY_COUNTRY.get(country, "EUR")
         request_id = parsed.get("request_id") or f"REQ-{uuid.uuid4().hex[:8].upper()}"
-        title = parsed.get("title") or f"{category['category_l2']} request"
+        title = parsed.get("title") or (f"{category['category_l2']} request" if category else "Procurement request")
 
         quantity = self._coerce_int(parsed.get("quantity"))
         if quantity is None:
@@ -380,14 +380,14 @@ class RequestWorkflowService:
             "requester_id": parsed.get("requester_id") or "frontend-user",
             "requester_role": parsed.get("requester_role") or "Requester",
             "submitted_for_id": parsed.get("submitted_for_id") or "frontend-user",
-            "category_l1": category["category_l1"],
-            "category_l2": category["category_l2"],
+            "category_l1": category["category_l1"] if category else None,
+            "category_l2": category["category_l2"] if category else None,
             "title": title,
             "request_text": combined_message.strip(),
             "currency": currency or "EUR",
             "budget_amount": budget_amount,
             "quantity": quantity,
-            "unit_of_measure": parsed.get("unit_of_measure") or category["typical_unit"],
+            "unit_of_measure": parsed.get("unit_of_measure") or (category["typical_unit"] if category else None),
             "required_by_date": parsed.get("required_by_date") or self._extract_required_date(combined_message),
             "preferred_supplier_mentioned": preferred,
             "incumbent_supplier": incumbent,
@@ -406,10 +406,15 @@ class RequestWorkflowService:
                 continue
             value = request_json.get(field_name)
             if value in (None, "", []):
-                missing.append({"field": field_name, "reason": "missing", "criteria": criteria})
+                missing.append({
+                    "field": field_name,
+                    "reason": "missing",
+                    "criteria": criteria,
+                    "attempted_value": self._extract_requested_product_phrase(request_json.get("request_text", "")) if field_name == "category_l2" else None,
+                })
                 continue
             if field_name == "category_l2" and value not in criteria.get("values", []):
-                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
+                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
             elif field_name == "country" and value not in criteria.get("values", []):
                 missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
             elif field_name == "currency" and value not in criteria.get("values", []):
@@ -426,6 +431,9 @@ class RequestWorkflowService:
             field = item["field"]
             criteria = item["criteria"]
             if field == "category_l2":
+                attempted_value = item.get("attempted_value")
+                if attempted_value:
+                    return f"{attempted_value} isn't a supplied product, try asking for a valid one."
                 examples = ", ".join(criteria["values"][:5])
                 prompts.append(f"what are you buying exactly? Use a category such as {examples}")
             elif field == "country":
@@ -442,7 +450,7 @@ class RequestWorkflowService:
         joined = " Also tell me ".join(prompts)
         return f"I still need critical request details before I can run supplier matching: {joined}."
 
-    def _coerce_category(self, category_l1: str | None, category_l2: str | None, message: str) -> dict[str, str]:
+    def _coerce_category(self, category_l1: str | None, category_l2: str | None, message: str) -> dict[str, str] | None:
         if category_l1 and category_l2:
             for row in self.categories:
                 if row["category_l1"].lower() == str(category_l1).lower() and row["category_l2"].lower() == str(category_l2).lower():
@@ -453,7 +461,7 @@ class RequestWorkflowService:
                     return row
         return self._detect_category(message)
 
-    def _detect_category(self, message: str) -> dict[str, str]:
+    def _detect_category(self, message: str) -> dict[str, str] | None:
         lowered = message.lower()
         keyword_map = {
             "dock": "Docking Stations",
@@ -477,7 +485,7 @@ class RequestWorkflowService:
                 for row in self.categories:
                     if row["category_l2"] == category_l2:
                         return row
-        return self.categories[0]
+        return None
 
     def _coerce_country(self, country: str | None, site: str | None, delivery_countries: list[str] | None, message: str) -> str | None:
         for candidate in [country, *(delivery_countries or []), site, self._detect_country(message)]:
@@ -554,6 +562,19 @@ class RequestWorkflowService:
             if re.search(rf"\b{re.escape(city)}\b", lowered):
                 return city.title()
         return None
+
+    def _extract_requested_product_phrase(self, message: str | None) -> str | None:
+        if not message:
+            return None
+        cleaned = re.sub(r"follow-up\s*:\s*", " ", message.lower())
+        cleaned = re.sub(r"\b\d+(?:\.\d+)?[kKmM]?\b", " ", cleaned)
+        cleaned = re.sub(r"\b(to|for|in|at|by|under|budget|with|need|needs|qty|quantity|eur|usd|chf|gbp|euro|euros)\b", " ", cleaned)
+        cleaned = re.sub(r"[^a-zA-Z\s/-]", " ", cleaned)
+        tokens = [token for token in cleaned.split() if len(token) > 2 and token not in CITY_TO_COUNTRY]
+        if not tokens:
+            return None
+        phrase = " ".join(tokens[:3]).strip()
+        return phrase.capitalize() if phrase else None
 
     def _find_supplier_name(self, text: str | None) -> str | None:
         if not text:
