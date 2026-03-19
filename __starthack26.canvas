@@ -1,249 +1,692 @@
 {
   "nodes": [
     {
-      "id": "65957dd4516235df",
-      "type": "text",
-      "text": "",
-      "styleAttributes": {},
-      "x": 60,
-      "y": 400,
-      "width": 60,
-      "height": 60
+      "id": "engine_group",
+      "type": "group",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 100,
+      "y": 1640,
+      "width": 600,
+      "height": 1700,
+      "label": "SupplierEngine.process() — Deterministic Policy Engine"
     },
     {
-      "id": "a641add3b632152f",
-      "type": "text",
-      "text": "",
-      "styleAttributes": {},
-      "x": -940,
-      "y": -500,
-      "width": 60,
-      "height": 60
-    },
-    {
-      "id": "f484551a72373803",
-      "type": "text",
-      "text": "",
-      "styleAttributes": {},
-      "x": -740,
-      "y": -1120,
-      "width": 1500,
-      "height": 1460
-    },
-    {
-      "id": "88c38d3fff2c54c5",
-      "type": "text",
-      "text": "",
+      "id": "data_group",
+      "type": "group",
       "styleAttributes": {},
       "x": -1560,
-      "y": -140,
-      "width": 2460,
-      "height": 240
+      "y": 920,
+      "width": 380,
+      "height": 2080,
+      "label": "Data Sources"
     },
     {
-      "id": "9cbc76a5293689f4",
-      "type": "text",
-      "text": "",
+      "id": "tools_group",
+      "type": "group",
       "styleAttributes": {},
-      "x": 200,
-      "y": 1380,
-      "width": 260,
-      "height": 60
+      "x": 820,
+      "y": 1460,
+      "width": 440,
+      "height": 1000,
+      "label": "Offline Calibration & Validation Tools"
     },
     {
-      "id": "ed421803a0676269",
+      "id": "tool_clean",
       "type": "text",
-      "text": "policies.json",
+      "text": "**clean_policies.py**\nLLM-powered policy normalisation\n1. Infer schema from sample\n2. Clean each item (add machine-\n    readable fields from free text)\n3. Verify identity preserved\nUses Moonshot API",
       "styleAttributes": {
-        "shape": "database"
+        "textAlign": "center"
+      },
+      "x": 850,
+      "y": 1500,
+      "width": 380,
+      "height": 220
+    },
+    {
+      "id": "user_input",
+      "type": "text",
+      "text": "**User Request**\nNatural language procurement request\n_e.g. \"50 laptops to Zurich, budget 100k\"_",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 0,
+      "width": 520,
+      "height": 120
+    },
+    {
+      "id": "llm_parser",
+      "type": "text",
+      "text": "**Moonshot LLM Parser**\nConverts natural language → structured JSON\nModel: kimi-k2 | temp=0 | JSON response mode\nExtracts: category, quantity, budget, country, supplier preferences",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 240,
+      "width": 520,
+      "height": 140
+    },
+    {
+      "id": "normalise",
+      "type": "text",
+      "text": "**Normalise Request** (`_normalise_request`)\nCity → Country resolution (Zurich → CH)\nCurrency mapping (euro → EUR) | Category L1/L2 matching\nSupplier name fuzzy lookup | UUID generation",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 500,
+      "width": 520,
+      "height": 140
+    },
+    {
+      "id": "critical_check",
+      "type": "text",
+      "text": "**Missing Critical Fields?**\ncategory_l2 · country · quantity\nbudget_amount · currency",
+      "styleAttributes": {
+        "shape": "diamond",
+        "textAlign": "center"
+      },
+      "x": 200,
+      "y": 760,
+      "width": 400,
+      "height": 200
+    },
+    {
+      "id": "clarification",
+      "type": "text",
+      "text": "**Build Follow-up Question**\nGenerate targeted clarification prompt\nStore session state for next turn\nReturn `needs_clarification` status",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": -1040,
+      "y": 800,
+      "width": 420,
+      "height": 140
+    },
+    {
+      "id": "step1_validate",
+      "type": "text",
+      "text": "**Step 1: Validate Request**\nCheck: quantity present? budget present?\nDeadline in past? Tight lead time (≤5 days)?\nGenerate validation issues + ER-001 escalations",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 1680,
+      "width": 520,
+      "height": 140
+    },
+    {
+      "id": "step2_filter",
+      "type": "text",
+      "text": "**Step 2: Filter Eligible Suppliers**\nCategory L1/L2 match → Contract active?\nService regions cover delivery country?\nData residency supported? → Policy restrictions?\nExcluded suppliers logged with reasons",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 1890,
+      "width": 520,
+      "height": 150
+    },
+    {
+      "id": "step3_pricing",
+      "type": "text",
+      "text": "**Step 3: Attach Pricing**\nLookup by supplier × category × region × currency\nQuantity tier matching (min/max brackets)\nCH → EU fallback | CHF → EUR cross-pricing\nRe-evaluate restrictions with total value",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 2110,
+      "width": 520,
+      "height": 150
+    },
+    {
+      "id": "step4_policy",
+      "type": "text",
+      "text": "**Step 4: Policy Evaluation**\nApproval thresholds (by currency + value band)\nPreferred supplier check (on preferred list?)\nCategory rules (security review, spec review, etc.)\nGeography rules (country-specific requirements)",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 2330,
+      "width": 520,
+      "height": 150
+    },
+    {
+      "id": "step5_feasibility",
+      "type": "text",
+      "text": "**Step 5: Feasibility Checks**\nBudget: 20% tolerance → warning vs blocking escalation\nLead-time: all suppliers exceed deadline? → advisory\nEscalation triggers: ER-001 (input), ER-002 (preferred\nrestricted), ER-004 (no suppliers / infeasible)",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 2550,
+      "width": 520,
+      "height": 150
+    },
+    {
+      "id": "step6_rank",
+      "type": "text",
+      "text": "**Step 6: Rank Suppliers (Weighted Scoring)**\nscore = risk × w₁ − quality × w₂ − ESG × w₃\n            − preferred × w₄ − incumbent × w₅ − mentioned × w₆\nWeights fitted via Bradley-Terry logistic regression\nLower score = better rank | Confidence % vs benchmark",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 2770,
+      "width": 520,
+      "height": 160
+    },
+    {
+      "id": "step7_recommend",
+      "type": "text",
+      "text": "**Step 7: Build Recommendation + Audit Trail**\nPolicy trace, audit trail, supplier notes",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 140,
+      "y": 3000,
+      "width": 520,
+      "height": 90
+    },
+    {
+      "id": "outcome_ready",
+      "type": "text",
+      "text": "**ready_to_award**\nNo blockers, no\napprovals needed",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": -120,
+      "y": 3200,
+      "width": 260,
+      "height": 110
+    },
+    {
+      "id": "outcome_pending",
+      "type": "text",
+      "text": "**pending_approval**\nNon-blocking escalations\nrequire sign-off",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 170,
+      "y": 3200,
+      "width": 260,
+      "height": 110
+    },
+    {
+      "id": "outcome_clarify",
+      "type": "text",
+      "text": "**needs_clarification**\nMissing requester input\n(ER-001 blockers)",
+      "styleAttributes": {
+        "textAlign": "center"
       },
       "x": 460,
-      "y": 1860,
+      "y": 3200,
       "width": 260,
-      "height": 60
+      "height": 110
     },
     {
-      "id": "ad3c844a63173892",
+      "id": "outcome_cannot",
       "type": "text",
-      "text": "cleaned_policies.json",
+      "text": "**cannot_proceed**\nNo suppliers or\ninfeasible (ER-004)",
       "styleAttributes": {
-        "shape": "database"
+        "textAlign": "center"
       },
-      "x": 1000,
-      "y": 1920,
+      "x": 750,
+      "y": 3200,
       "width": 260,
-      "height": 60
+      "height": 110
     },
     {
-      "id": "b751621720849698",
+      "id": "tool_fit",
       "type": "text",
-      "text": "User request",
-      "styleAttributes": {},
-      "x": 240,
-      "y": 2060,
-      "width": 260,
-      "height": 60
+      "text": "**fit_scoring_weights.py**\nPairwise logistic regression (Bradley-Terry model)\nFeatures: price_ratio, risk, quality,\nESG, preferred, incumbent, mentioned\nOutputs normalised weights → JSON",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 850,
+      "y": 1750,
+      "width": 380,
+      "height": 160
     },
     {
-      "id": "bb04673b5c153b6c",
+      "id": "tool_validate",
       "type": "text",
-      "text": "request json",
-      "styleAttributes": {},
-      "x": 780,
+      "text": "**validate_engine.py**\nCompare engine vs historical awards:\n1. Winner match (rank-1 == awarded?)\n2. Awarded supplier in shortlist?\n3. Escalation flag agreement\n4. Status vs awarded feasibility\n5. Price proximity (>15% gap?)",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 850,
+      "y": 1980,
+      "width": 380,
+      "height": 180
+    },
+    {
+      "id": "tool_escalation",
+      "type": "text",
+      "text": "**escalation_stats.py**\nEscalation confusion matrix:\nTP / FP / FN / TN analysis\nPrecision, Recall, F1, Specificity\nFP breakdown by rule fired\nFN breakdown by missed target",
+      "styleAttributes": {
+        "textAlign": "center"
+      },
+      "x": 850,
+      "y": 2230,
+      "width": 380,
+      "height": 170
+    },
+    {
+      "id": "ds_categories",
+      "type": "text",
+      "text": "categories.csv\nL1/L2 taxonomy + typical units",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 970,
+      "width": 320,
+      "height": 80
+    },
+    {
+      "id": "ds_criteria",
+      "type": "text",
+      "text": "criteria.json\nRequired fields + valid values",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 1160,
+      "width": 320,
+      "height": 80
+    },
+    {
+      "id": "ds_suppliers",
+      "type": "text",
+      "text": "suppliers.csv\nSupplier profiles, quality/risk/ESG scores,\nservice regions, contract status",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 1440,
+      "width": 320,
+      "height": 100
+    },
+    {
+      "id": "ds_pricing",
+      "type": "text",
+      "text": "pricing.csv\nUnit prices by region, currency,\nquantity tier, lead times",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 1660,
+      "width": 320,
+      "height": 100
+    },
+    {
+      "id": "ds_policies_clean",
+      "type": "text",
+      "text": "cleaned_policies.json\nApproval thresholds, preferred/restricted\nsuppliers, category rules, geography\nrules, escalation rules",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 1880,
+      "width": 320,
+      "height": 130
+    },
+    {
+      "id": "ds_awards",
+      "type": "text",
+      "text": "historical_awards.csv\nPast procurement awards\nfor benchmarking + training",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
       "y": 2140,
-      "width": 260,
-      "height": 60
+      "width": 320,
+      "height": 100
     },
     {
-      "id": "a5f0a83c3bfb92cb",
+      "id": "ds_weights",
       "type": "text",
-      "text": "",
-      "styleAttributes": {},
-      "x": 1040,
-      "y": 2300,
-      "width": 260,
-      "height": 60
-    },
-    {
-      "id": "692243b2d0649b22",
-      "type": "text",
-      "text": "Request user clarification",
-      "styleAttributes": {},
-      "x": 620,
-      "y": 2360,
-      "width": 260,
-      "height": 60
-    },
-    {
-      "id": "4ed166085dcb02d4",
-      "type": "text",
-      "text": "Deterministic policy application layer",
-      "styleAttributes": {},
-      "x": 1360,
-      "y": 2120,
-      "width": 280,
-      "height": 60
-    },
-    {
-      "id": "a9acd453b515c63f",
-      "type": "text",
-      "text": "Past awards",
+      "text": "scoring_weights.json\nFitted ranking weights\n(normalised, max=1.0)",
       "styleAttributes": {
-        "shape": "database"
+        "shape": "database",
+        "textAlign": "center"
       },
-      "x": 1200,
-      "y": 1620,
-      "width": 260,
-      "height": 60
+      "x": -1530,
+      "y": 2360,
+      "width": 320,
+      "height": 100
+    },
+    {
+      "id": "ds_policies_raw",
+      "type": "text",
+      "text": "policies.json\n(raw, unstructured text)",
+      "styleAttributes": {
+        "shape": "database",
+        "textAlign": "center"
+      },
+      "x": -1530,
+      "y": 2580,
+      "width": 320,
+      "height": 80
+    },
+    {
+      "id": "best_bad_label",
+      "type": "text",
+      "text": "**No eligible suppliers?**\nBest-bad fallback: return\nnon-compliant candidates\nwith violation reasons\nfor human review",
+      "styleAttributes": {
+        "shape": "diamond",
+        "textAlign": "center"
+      },
+      "x": -1210,
+      "y": 3110,
+      "width": 340,
+      "height": 200
     }
   ],
   "edges": [
     {
-      "id": "6ec04ebd52e48ce5",
-      "styleAttributes": {
-        "pathfindingMethod": "a-star"
-      },
-      "fromNode": "a641add3b632152f",
-      "fromSide": "right",
-      "toNode": "65957dd4516235df",
+      "id": "e_user_llm",
+      "styleAttributes": {},
+      "fromNode": "user_input",
+      "fromSide": "bottom",
+      "toNode": "llm_parser",
       "toSide": "top"
     },
     {
-      "id": "16ff00c781009080",
+      "id": "e_llm_normalise",
+      "styleAttributes": {},
+      "fromNode": "llm_parser",
+      "fromSide": "bottom",
+      "toNode": "normalise",
+      "toSide": "top"
+    },
+    {
+      "id": "e_normalise_check",
+      "styleAttributes": {},
+      "fromNode": "normalise",
+      "fromSide": "bottom",
+      "toNode": "critical_check",
+      "toSide": "top"
+    },
+    {
+      "id": "e_check_clarify",
       "styleAttributes": {
         "pathfindingMethod": "a-star"
       },
-      "fromNode": "65957dd4516235df",
+      "fromNode": "critical_check",
       "fromSide": "left",
-      "toNode": "a641add3b632152f",
-      "toSide": "right"
+      "toNode": "clarification",
+      "toSide": "right",
+      "label": "Yes — fields missing/invalid"
     },
     {
-      "id": "cd8047e1048e6b32",
+      "id": "e_clarify_user",
       "styleAttributes": {
         "pathfindingMethod": "a-star"
       },
-      "fromNode": "a641add3b632152f",
+      "fromNode": "clarification",
       "fromSide": "top",
-      "toNode": "65957dd4516235df",
-      "toSide": "bottom"
-    },
-    {
-      "id": "269d9dcbf483d32e",
-      "styleAttributes": {
-        "pathfindingMethod": "a-star"
-      },
-      "fromNode": "a641add3b632152f",
-      "fromSide": "right",
-      "toNode": "65957dd4516235df",
-      "toSide": "right"
-    },
-    {
-      "id": "61d7c84a93d29e1c",
-      "styleAttributes": {},
-      "fromNode": "ed421803a0676269",
-      "fromSide": "right",
-      "toNode": "ad3c844a63173892",
+      "toNode": "user_input",
       "toSide": "left",
-      "label": "Cleaning script"
+      "label": "Ask user + store session"
     },
     {
-      "id": "f69b88baebb2ac65",
+      "id": "e_check_step1",
       "styleAttributes": {},
-      "fromNode": "b751621720849698",
-      "fromSide": "right",
-      "toNode": "bb04673b5c153b6c",
-      "toSide": "left",
-      "label": "Lightweight LLM"
-    },
-    {
-      "id": "fe40cda185009c3f",
-      "styleAttributes": {},
-      "fromNode": "ad3c844a63173892",
-      "fromSide": "right",
-      "toNode": "4ed166085dcb02d4",
-      "toSide": "top"
-    },
-    {
-      "id": "935a5ea4cd6d41cc",
-      "styleAttributes": {},
-      "fromNode": "bb04673b5c153b6c",
-      "fromSide": "right",
-      "toNode": "a5f0a83c3bfb92cb",
+      "fromNode": "critical_check",
+      "fromSide": "bottom",
+      "toNode": "step1_validate",
       "toSide": "top",
-      "label": "Detect missing info"
+      "label": "All fields valid"
     },
     {
-      "id": "880754aae1397720",
+      "id": "e_validate_filter",
       "styleAttributes": {},
-      "fromNode": "a5f0a83c3bfb92cb",
-      "fromSide": "left",
-      "toNode": "692243b2d0649b22",
-      "toSide": "right"
+      "fromNode": "step1_validate",
+      "fromSide": "bottom",
+      "toNode": "step2_filter",
+      "toSide": "top"
     },
     {
-      "id": "61960c005cc3d0b7",
+      "id": "e_filter_pricing",
       "styleAttributes": {},
-      "fromNode": "692243b2d0649b22",
-      "fromSide": "top",
-      "toNode": "bb04673b5c153b6c",
-      "toSide": "bottom"
+      "fromNode": "step2_filter",
+      "fromSide": "bottom",
+      "toNode": "step3_pricing",
+      "toSide": "top"
     },
     {
-      "id": "746550a1f6734261",
+      "id": "e_pricing_policy",
       "styleAttributes": {},
-      "fromNode": "bb04673b5c153b6c",
+      "fromNode": "step3_pricing",
+      "fromSide": "bottom",
+      "toNode": "step4_policy",
+      "toSide": "top"
+    },
+    {
+      "id": "e_policy_feasibility",
+      "styleAttributes": {},
+      "fromNode": "step4_policy",
+      "fromSide": "bottom",
+      "toNode": "step5_feasibility",
+      "toSide": "top"
+    },
+    {
+      "id": "e_feasibility_rank",
+      "styleAttributes": {},
+      "fromNode": "step5_feasibility",
+      "fromSide": "bottom",
+      "toNode": "step6_rank",
+      "toSide": "top"
+    },
+    {
+      "id": "e_rank_recommend",
+      "styleAttributes": {},
+      "fromNode": "step6_rank",
+      "fromSide": "bottom",
+      "toNode": "step7_recommend",
+      "toSide": "top"
+    },
+    {
+      "id": "e_rec_ready",
+      "styleAttributes": {},
+      "fromNode": "step7_recommend",
+      "fromSide": "bottom",
+      "toNode": "outcome_ready",
+      "toSide": "top"
+    },
+    {
+      "id": "e_rec_pending",
+      "styleAttributes": {},
+      "fromNode": "step7_recommend",
+      "fromSide": "bottom",
+      "toNode": "outcome_pending",
+      "toSide": "top"
+    },
+    {
+      "id": "e_rec_clarify",
+      "styleAttributes": {},
+      "fromNode": "step7_recommend",
+      "fromSide": "bottom",
+      "toNode": "outcome_clarify",
+      "toSide": "top"
+    },
+    {
+      "id": "e_rec_cannot",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "step7_recommend",
       "fromSide": "right",
-      "toNode": "4ed166085dcb02d4",
+      "toNode": "outcome_cannot",
+      "toSide": "top"
+    },
+    {
+      "id": "e_categories_normalise",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_categories",
+      "fromSide": "right",
+      "toNode": "normalise",
       "toSide": "left"
     },
     {
-      "id": "c1000eea3522d4b0",
-      "styleAttributes": {},
-      "fromNode": "a9acd453b515c63f",
+      "id": "e_criteria_check",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_criteria",
+      "fromSide": "right",
+      "toNode": "critical_check",
+      "toSide": "left"
+    },
+    {
+      "id": "e_suppliers_filter",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_suppliers",
+      "fromSide": "right",
+      "toNode": "step2_filter",
+      "toSide": "left"
+    },
+    {
+      "id": "e_pricing_step3",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_pricing",
+      "fromSide": "right",
+      "toNode": "step3_pricing",
+      "toSide": "left"
+    },
+    {
+      "id": "e_policies_step4",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_policies_clean",
+      "fromSide": "right",
+      "toNode": "step4_policy",
+      "toSide": "left"
+    },
+    {
+      "id": "e_awards_rank",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_awards",
+      "fromSide": "right",
+      "toNode": "step6_rank",
+      "toSide": "left",
+      "label": "Benchmark scores"
+    },
+    {
+      "id": "e_weights_rank",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_weights",
+      "fromSide": "right",
+      "toNode": "step6_rank",
+      "toSide": "left"
+    },
+    {
+      "id": "e_raw_clean",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_policies_raw",
+      "fromSide": "right",
+      "toNode": "tool_clean",
+      "toSide": "left",
+      "label": "Input"
+    },
+    {
+      "id": "e_clean_output",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "tool_clean",
+      "fromSide": "left",
+      "toNode": "ds_policies_clean",
+      "toSide": "right",
+      "label": "Produces"
+    },
+    {
+      "id": "e_awards_fit",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_awards",
+      "fromSide": "right",
+      "toNode": "tool_fit",
+      "toSide": "left",
+      "label": "Training data"
+    },
+    {
+      "id": "e_fit_weights",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "tool_fit",
+      "fromSide": "left",
+      "toNode": "ds_weights",
+      "toSide": "right",
+      "label": "Produces"
+    },
+    {
+      "id": "e_awards_validate",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_awards",
+      "fromSide": "right",
+      "toNode": "tool_validate",
+      "toSide": "left",
+      "label": "Ground truth"
+    },
+    {
+      "id": "e_awards_escalation",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "ds_awards",
+      "fromSide": "right",
+      "toNode": "tool_escalation",
+      "toSide": "left",
+      "label": "Ground truth"
+    },
+    {
+      "id": "e_filter_bestbad",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "step2_filter",
+      "fromSide": "left",
+      "toNode": "best_bad_label",
+      "toSide": "top",
+      "label": "No eligible suppliers"
+    },
+    {
+      "id": "e_bestbad_rank",
+      "styleAttributes": {
+        "pathfindingMethod": "a-star"
+      },
+      "fromNode": "best_bad_label",
       "fromSide": "bottom",
-      "toNode": "4ed166085dcb02d4",
-      "toSide": "top"
+      "toNode": "step6_rank",
+      "toSide": "left",
+      "label": "Best-effort shortlist"
     }
   ],
   "metadata": {}

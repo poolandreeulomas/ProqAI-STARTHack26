@@ -169,6 +169,16 @@ def build_item_system_prompt() -> str:
     )
 
 
+def build_scope_system_prompt() -> str:
+    return (
+        "You infer category_l2 scope for one procurement policy rule. "
+        "Return JSON only with exactly these keys: applies_to, scope_rationale. "
+        "If the rule text clearly narrows applicability to specific category_l2 values, return them in applies_to. "
+        "If the text does not clearly narrow applicability, return applies_to as null. "
+        "Use only category_l2 values from the provided catalog."
+    )
+
+
 def build_item_user_prompt(
     section: str,
     item: dict[str, Any],
@@ -199,6 +209,24 @@ def build_item_user_prompt(
     )
 
 
+def build_scope_user_prompt(section: str, item: dict[str, Any]) -> str:
+    return json.dumps(
+        {
+            "task": "Infer applies_to only when the rule text clearly narrows scope to specific category_l2 values.",
+            "section": section,
+            "category_catalog_csv": category_catalog_csv(),
+            "rules": [
+                "Use only exact category_l2 values from the catalog.",
+                "If the text implies a broad but still category-specific family like cloud requests or end-user-device requests, map that family to the matching category_l2 list.",
+                "If the text is not clearly category-l2-specific, return applies_to as null.",
+                "Do not infer supplier, country, currency, or approval fields here.",
+            ],
+            "item": item,
+        },
+        ensure_ascii=False,
+    )
+
+
 def clean_item(
     section: str,
     item: dict[str, Any],
@@ -218,6 +246,30 @@ def clean_item(
     cleaned_item = response.get("cleaned_item")
     if not isinstance(cleaned_item, dict):
         raise RuntimeError(f"Moonshot did not return a valid cleaned_item for section {section}.")
+    return cleaned_item
+
+
+def maybe_infer_applies_to(section: str, cleaned_item: dict[str, Any]) -> dict[str, Any]:
+    if section not in {"geography_rules", "category_rules"}:
+        return cleaned_item
+    if cleaned_item.get("applies_to"):
+        return cleaned_item
+    if not (cleaned_item.get("rule_text") or cleaned_item.get("rule")):
+        return cleaned_item
+
+    response = call_moonshot(
+        [
+            {"role": "system", "content": build_scope_system_prompt()},
+            {"role": "user", "content": build_scope_user_prompt(section, cleaned_item)},
+        ]
+    )
+    applies_to = response.get("applies_to")
+    scope_rationale = response.get("scope_rationale")
+    if isinstance(applies_to, list) and applies_to:
+        cleaned_item = dict(cleaned_item)
+        cleaned_item["applies_to"] = applies_to
+        if isinstance(scope_rationale, str) and scope_rationale.strip():
+            cleaned_item["scope_rationale"] = scope_rationale.strip()
     return cleaned_item
 
 
@@ -242,6 +294,7 @@ def clean_policies(policies: dict[str, Any]) -> dict[str, Any]:
             previous_item = original_items[index - 1] if index > 0 else None
             next_item = original_items[index + 1] if index + 1 < len(original_items) else None
             cleaned_item = clean_item(section, item, schema, previous_item, next_item)
+            cleaned_item = maybe_infer_applies_to(section, cleaned_item)
             verify_cleaned_item(section, item, cleaned_item)
             cleaned_items.append(cleaned_item)
         if len(cleaned_items) != len(original_items):
