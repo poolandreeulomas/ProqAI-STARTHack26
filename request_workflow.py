@@ -433,13 +433,13 @@ class RequestWorkflowService:
             if field_name == "category_l2" and value not in criteria.get("values", []):
                 missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
             elif field_name == "country" and value not in criteria.get("values", []):
-                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
+                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
             elif field_name == "currency" and value not in criteria.get("values", []):
-                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
+                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
             elif field_name == "quantity" and not self._is_positive_number(value):
-                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
+                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
             elif field_name == "budget_amount" and not self._is_positive_number(value):
-                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria})
+                missing.append({"field": field_name, "reason": "invalid", "criteria": criteria, "attempted_value": value})
         return missing
 
     def _build_follow_up_question(self, missing_fields: list[dict[str, Any]]) -> str:
@@ -454,13 +454,32 @@ class RequestWorkflowService:
                 examples = ", ".join(criteria["values"][:5])
                 prompts.append(f"What product are you buying? Use a category such as {examples}.")
             elif field == "country":
-                prompts.append("Which delivery country should I use?")
+                attempted_value = item.get("attempted_value")
+                if item.get("reason") == "invalid" and attempted_value:
+                    prompts.append(
+                        f"I interpreted the delivery country as {attempted_value}, but that country is not supported by the current policy dataset."
+                    )
+                else:
+                    prompts.append("Which delivery country should I use?")
             elif field == "quantity":
-                prompts.append("How many units do you need?")
+                attempted_value = item.get("attempted_value")
+                prompts.append(
+                    f"I could not use the quantity value {attempted_value}." if item.get("reason") == "invalid" and attempted_value
+                    else "How many units do you need?"
+                )
             elif field == "budget_amount":
-                prompts.append("What is your total budget?")
+                attempted_value = item.get("attempted_value")
+                prompts.append(
+                    f"I could not use the budget value {attempted_value}." if item.get("reason") == "invalid" and attempted_value
+                    else "What is your total budget?"
+                )
             elif field == "currency":
-                prompts.append("Which currency should I use? Please choose EUR, CHF, or USD.")
+                attempted_value = item.get("attempted_value")
+                prompts.append(
+                    f"I interpreted the currency as {attempted_value}, but only EUR, CHF, or USD are supported."
+                    if item.get("reason") == "invalid" and attempted_value
+                    else "Which currency should I use? Please choose EUR, CHF, or USD."
+                )
         if not prompts:
             field_names = ", ".join(item["field"] for item in missing_fields)
             return f"I still need critical request details before I can run supplier matching: please provide valid values for {field_names}."
