@@ -24,15 +24,15 @@ from typing import Any
 # Constants / helpers
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(__file__).parent / "data/data"
+DATA_DIR = Path(__file__).parent.parent / "data/data"
 
 # ISO-2 country code → pricing region used in pricing.csv
+# Distinct region values in pricing.csv: EU, CH, Americas, APAC, MEA
 _COUNTRY_TO_REGION: dict[str, str] = {
     "CH": "CH",
-    "US": "US", "CA": "US",
+    "US": "Americas", "CA": "Americas", "BR": "Americas", "MX": "Americas",
     "AU": "APAC", "SG": "APAC", "JP": "APAC", "IN": "APAC",
     "UAE": "MEA", "ZA": "MEA",
-    "BR": "LATAM", "MX": "LATAM",
 }
 
 
@@ -145,36 +145,44 @@ class SupplierEngine:
         )
 
         # ── 5. Budget feasibility check ────────────────────────────────
+        # Historical data shows budgets are often indicative rather than hard caps.
+        # Overage ≤ 20%  → validation warning only (recommendation can still proceed).
+        # Overage  > 20% → blocking escalation requiring requester clarification.
+        _BUDGET_TOLERANCE = 0.20
         if budget is not None and priced:
             min_total = min(
                 float(s["pricing"]["unit_price"]) * (quantity or 1)
                 for s in priced
             )
             if min_total > budget:
+                overage_pct = (min_total - budget) / budget
+                severity = "critical" if overage_pct > _BUDGET_TOLERANCE else "high"
                 validation_issues.append({
                     "issue_id": f"V-{len(validation_issues)+1:03d}",
-                    "severity": "critical",
+                    "severity": severity,
                     "type": "budget_insufficient",
                     "description": (
                         f"Budget {currency} {budget:,.2f} cannot cover {quantity or '?'} units "
-                        f"at any compliant supplier. Lowest available total: {currency} {min_total:,.2f}."
+                        f"at any compliant supplier. Lowest available total: {currency} {min_total:,.2f} "
+                        f"({overage_pct*100:.1f}% over budget)."
                     ),
                     "action_required": (
-                        f"Increase budget to at least {currency} {min_total:,.2f} "
-                        f"or reduce quantity."
+                        f"Increase budget to at least {currency} {min_total:,.2f} or reduce quantity."
                     ),
                 })
-                if not any(e["rule"] == "ER-001" and "budget" in e["trigger"].lower() for e in escalations):
-                    escalations.append({
-                        "escalation_id": f"ESC-{len(escalations)+1:03d}",
-                        "rule": "ER-001",
-                        "trigger": (
-                            f"Budget {currency} {budget:,.2f} is insufficient to fulfil "
-                            f"quantity {quantity} at any compliant supplier price."
-                        ),
-                        "escalate_to": "Requester Clarification",
-                        "blocking": True,
-                    })
+                if overage_pct > _BUDGET_TOLERANCE:
+                    if not any(e["rule"] == "ER-001" and "budget" in e["trigger"].lower() for e in escalations):
+                        escalations.append({
+                            "escalation_id": f"ESC-{len(escalations)+1:03d}",
+                            "rule": "ER-001",
+                            "trigger": (
+                                f"Budget {currency} {budget:,.2f} is insufficient by more than 20% — "
+                                f"lowest compliant total is {currency} {min_total:,.2f} "
+                                f"({overage_pct*100:.1f}% over budget)."
+                            ),
+                            "escalate_to": "Requester Clarification",
+                            "blocking": True,
+                        })
 
         # ── 6. Lead-time feasibility check ─────────────────────────────
         if required_by and priced:
@@ -396,18 +404,24 @@ class SupplierEngine:
     ) -> dict | None:
         today_str = str(self._today)
 
-        candidates = [
-            p for p in self.pricing
-            if (
+        def _match(p: dict, rgn: str) -> bool:
+            return (
                 p["supplier_id"] == supplier_id
                 and p["category_l1"] == cat_l1
                 and p["category_l2"] == cat_l2
-                and p["region"] == region
+                and p["region"] == rgn
                 and p["currency"] == currency
                 and p.get("valid_from", "0000-00-00") <= today_str
                 and today_str <= p.get("valid_to", "9999-99-99")
             )
-        ]
+
+        candidates = [p for p in self.pricing if _match(p, region)]
+
+        # Bug fix: CH suppliers are usually priced under "EU" in pricing.csv.
+        # If no CH-specific rows exist, fall back to EU pricing for the same currency.
+        if not candidates and region == "CH":
+            candidates = [p for p in self.pricing if _match(p, "EU")]
+
         if not candidates:
             return None
 
