@@ -171,6 +171,13 @@ class SupplierEngine:
             request, priced, quantity, budget, currency,
             primary_country, cat_l1, cat_l2, escalations
         )
+        policy_trace = self._build_policy_trace(
+            request=request,
+            priced=priced,
+            policy_eval=policy_eval,
+            escalations=escalations,
+            validation_issues=validation_issues,
+        )
 
         # ── 5. Budget feasibility check ────────────────────────────────
         # Historical data shows budgets are often indicative rather than hard caps.
@@ -284,6 +291,7 @@ class SupplierEngine:
                 "issues_detected": validation_issues,
             },
             "policy_evaluation": policy_eval,
+            "policy_trace": policy_trace,
             "supplier_shortlist": shortlist,
             "suppliers_excluded": excluded,
             "escalations": escalations,
@@ -342,7 +350,7 @@ class SupplierEngine:
             elif days_left <= 5:
                 add_issue(
                     "high", "tight_lead_time",
-                    f"Only {days_left} day(s) until required delivery — most suppliers need >5 days.",
+                    f"Only {days_left} day{"" if days_left==1 else "s"} until required delivery — most suppliers need >5 days.",
                     "Confirm whether deadline is a hard constraint; expedited options may not be available.",
                 )
 
@@ -639,8 +647,8 @@ class SupplierEngine:
                     "escalation_id": f"ESC-{len(escalations)+1:03d}",
                     "rule": at["threshold_id"],
                     "trigger": (
-                        f"Policy {at['threshold_id']} requires {quotes_required} supplier quote(s) "
-                        f"but only {len(priced)} eligible supplier(s) found."
+                        f"Policy {at['threshold_id']} requires {quotes_required} supplier quote{"" if quotes_required == 1 else "s"} "
+                        f"but only {len(priced)} eligible supplier{"" if len(priced) == 1 else "s"} found."
                     ),
                     "escalate_to": (
                         (at.get("deviation_approval_required_from")
@@ -680,9 +688,191 @@ class SupplierEngine:
                 ),
             },
             "preferred_supplier": preferred_eval,
+            "eligible_supplier_count": len(priced),
             "category_rules_applied": [cr["rule_id"] for cr in cat_rules],
             "geography_rules_applied": [gr["rule_id"] for gr in geo_rules],
         }
+
+    def _build_policy_trace(
+        self,
+        request: dict,
+        priced: list[dict],
+        policy_eval: dict,
+        escalations: list[dict],
+        validation_issues: list[dict],
+    ) -> list[dict]:
+        trace: list[dict] = []
+        covered_rules: set[str] = set()
+        escalation_by_rule = {e["rule"]: e for e in escalations}
+        currency = request.get("currency", "EUR")
+
+        approval = policy_eval.get("approval_threshold", {})
+        threshold_rule = approval.get("rule_applied")
+        if threshold_rule and threshold_rule != "N/A":
+            covered_rules.add(threshold_rule)
+            quotes_required = approval.get("quotes_required") or 1
+            eligible_count = policy_eval.get("eligible_supplier_count", len(priced))
+            threshold_escalation = escalation_by_rule.get(threshold_rule)
+            status = "passed" if eligible_count >= quotes_required else "needs_approval"
+            detail = (
+                f"{approval.get('basis', 'Approval threshold applied')}. "
+                f"Required quotes: {quotes_required}. Eligible suppliers found: {eligible_count}."
+            )
+            if threshold_escalation:
+                detail = (
+                    f"{detail} Approval required because {threshold_escalation['trigger']} "
+                    f"Escalates to {threshold_escalation['escalate_to']}."
+                )
+            trace.append({
+                "id": threshold_rule,
+                "category": "approval_threshold",
+                "status": status,
+                "title": f"Approval threshold {threshold_rule}",
+                "summary": (
+                    f"Quote requirement met: {eligible_count}/{quotes_required}"
+                    if status == "passed"
+                    else f"Quote requirement not met: {eligible_count}/{quotes_required}"
+                ),
+                "detail": detail,
+                "rule": threshold_rule,
+                "approver": (
+                    threshold_escalation["escalate_to"]
+                    if threshold_escalation
+                    else approval.get("deviation_approval")
+                ),
+                "blocking": bool(threshold_escalation and threshold_escalation.get("blocking")),
+            })
+
+        preferred = policy_eval.get("preferred_supplier")
+        if preferred:
+            preferred_rule = "preferred_supplier"
+            trace.append({
+                "id": preferred_rule,
+                "category": "preferred_supplier",
+                "status": (
+                    "passed"
+                    if preferred.get("status") == "eligible"
+                    else "failed"
+                ),
+                "title": "Preferred supplier check",
+                "summary": preferred.get("supplier") or "No preferred supplier named",
+                "detail": preferred.get("policy_note") or "No policy note available.",
+                "rule": preferred_rule,
+                "approver": None,
+                "blocking": False,
+            })
+
+        category_lookup = {
+            rule["rule_id"]: rule
+            for rule in self.policies.get("category_rules", [])
+            if rule["rule_id"] in policy_eval.get("category_rules_applied", [])
+        }
+        for rule_id, rule in category_lookup.items():
+            covered_rules.add(rule_id)
+            escalation = escalation_by_rule.get(rule_id)
+            trace.append({
+                "id": rule_id,
+                "category": "category_rule",
+                "status": "needs_approval" if escalation else "passed",
+                "title": f"Category rule {rule_id}",
+                "summary": rule.get("rule_type", "category rule").replace("_", " "),
+                "detail": (
+                    f"{rule.get('rule_text', 'Rule applied.')} "
+                    + (
+                        f"Approval required from {escalation['escalate_to']}."
+                        if escalation else
+                        "Rule evaluated without escalation."
+                    )
+                ).strip(),
+                "rule": rule_id,
+                "approver": escalation["escalate_to"] if escalation else None,
+                "blocking": bool(escalation and escalation.get("blocking")),
+            })
+
+        geo_lookup = {
+            rule["rule_id"]: rule
+            for rule in self.policies.get("geography_rules", [])
+            if rule["rule_id"] in policy_eval.get("geography_rules_applied", [])
+        }
+        for rule_id, rule in geo_lookup.items():
+            covered_rules.add(rule_id)
+            escalation = escalation_by_rule.get(rule_id)
+            scope = rule.get("country") or ", ".join(rule.get("countries", []))
+            trace.append({
+                "id": rule_id,
+                "category": "geography_rule",
+                "status": "needs_approval" if escalation else "passed",
+                "title": f"Geography rule {rule_id}",
+                "summary": scope or "Geography policy applied",
+                "detail": (
+                    f"{rule.get('rule_text', 'Geography rule applied.')} "
+                    + (
+                        f"Approval required from {escalation['escalate_to']}."
+                        if escalation else
+                        "Rule evaluated without escalation."
+                    )
+                ).strip(),
+                "rule": rule_id,
+                "approver": escalation["escalate_to"] if escalation else None,
+                "blocking": bool(escalation and escalation.get("blocking")),
+            })
+
+        for issue in validation_issues:
+            trace.append({
+                "id": issue["issue_id"],
+                "category": "validation",
+                "status": "failed" if issue.get("severity") == "critical" else "warning",
+                "title": f"Validation {issue['issue_id']}",
+                "summary": issue.get("type", "validation issue").replace("_", " "),
+                "detail": (
+                    f"{issue.get('description', '')} "
+                    f"Action required: {issue.get('action_required', 'Review required.')}."
+                ).strip(),
+                "rule": issue["issue_id"],
+                "approver": None,
+                "blocking": issue.get("severity") == "critical",
+            })
+
+        for escalation in escalations:
+            rule_id = escalation["rule"]
+            if rule_id in covered_rules:
+                continue
+            trace.append({
+                "id": escalation["escalation_id"],
+                "category": "escalation",
+                "status": "failed" if escalation.get("blocking") else "needs_approval",
+                "title": f"Escalation {rule_id}",
+                "summary": escalation.get("trigger", "Escalation raised"),
+                "detail": (
+                    f"Escalated to {escalation.get('escalate_to', 'manual review')}. "
+                    f"Blocking: {'yes' if escalation.get('blocking') else 'no'}."
+                ),
+                "rule": rule_id,
+                "approver": escalation.get("escalate_to"),
+                "blocking": bool(escalation.get("blocking")),
+            })
+
+        supplier_policy_ok = all(s.get("policy_compliant", True) for s in priced)
+        trace.append({
+            "id": "supplier_policy_compliance",
+            "category": "supplier_screening",
+            "status": "passed" if supplier_policy_ok else "failed",
+            "title": "Supplier screening",
+            "summary": (
+                f"All {len(priced)} ranked suppliers passed policy screening"
+                if supplier_policy_ok else
+                "One or more ranked suppliers carry policy violations"
+            ),
+            "detail": (
+                f"Evaluated {len(priced)} priced supplier{"" if len(priced) == 1 else "s"} in {currency}. "
+                "Best-effort suppliers are marked with explicit violation reasons."
+            ),
+            "rule": "supplier_policy_compliance",
+            "approver": None,
+            "blocking": not supplier_policy_ok,
+        })
+
+        return trace
 
     def _find_approval_threshold(self, currency: str, value: float) -> dict | None:
         for at in self.policies["approval_thresholds"]:
@@ -891,7 +1081,7 @@ class SupplierEngine:
                 return {
                     "status": "cannot_proceed",
                     "reason": (
-                        f"{len(truly_impossible)} infeasibility issue(s) cannot be resolved by requester input: "
+                        f"{len(truly_impossible)} infeasibility issue{"" if len(truly_impossible) == 1 else "s"} cannot be resolved by requester input: "
                         + "; ".join(e["trigger"][:80]
                                     for e in truly_impossible)
                     ),
@@ -909,7 +1099,8 @@ class SupplierEngine:
             return {
                 "status": "needs_clarification",
                 "reason": (
-                    f"{len(clarification_needed)} piece{"" if len(clarification_needed) == 1 else "s"} of requester input required before sourcing can proceed."
+                    f"{len(clarification_needed)} piece"
+                    f"{'' if len(clarification_needed) == 1 else 's'} of requester input required before sourcing can proceed."
                 ),
                 "clarifications_needed": clarifications_needed,
                 "preferred_supplier_if_clarified": top["supplier_name"] if top else None,
@@ -997,7 +1188,7 @@ class SupplierEngine:
             ],
             "historical_awards_consulted": len(hist) > 0,
             "historical_award_note": (
-                f"{len(hist)} prior award(s) found for {cat_l2} in {country}: "
+                f"{len(hist)} prior award{"" if len(hist) == 1 else "s"} found for {cat_l2} in {country}: "
                 + ", ".join(
                     f"{a['award_id']} → {a['supplier_name']} ({a['currency']} {a['total_value']})"
                     for a in hist[:5]

@@ -7,6 +7,7 @@ import uuid
 from csv import DictReader
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from time import perf_counter
 from pathlib import Path
 from typing import Any
 from urllib import error, request
@@ -124,6 +125,10 @@ class ParseResult:
     source: str
 
 
+class MoonshotParserError(RuntimeError):
+    pass
+
+
 class RequestWorkflowService:
     def __init__(self, engine: SupplierEngine):
         self.engine = engine
@@ -138,11 +143,15 @@ class RequestWorkflowService:
             reverse=True,
         )
         self._supplier_by_id = {row["supplier_id"]: row for row in self.supplier_rows}
+        self._category_names = ", ".join(row["category_l2"] for row in self.categories)
 
     def run(self, message: str, session_id: str | None = None) -> dict[str, Any]:
+        run_started = perf_counter()
         session_id = session_id or f"session-{uuid.uuid4().hex[:12]}"
         session_state = self.pending_sessions.get(session_id)
+        parse_started = perf_counter()
         parse_result = self._parse_request(message, session_state)
+        parse_ms = (perf_counter() - parse_started) * 1000
         missing_fields = self._find_missing_critical_fields(parse_result.request_json)
 
         REQUEST_JSON_PATH.write_text(
@@ -151,7 +160,12 @@ class RequestWorkflowService:
         )
 
         if missing_fields:
+            total_ms = (perf_counter() - run_started) * 1000
             question = self._build_follow_up_question(missing_fields)
+            print(
+                f"[workflow.timing] session_id={session_id} stage=clarification "
+                f"parser={parse_result.source} parse_ms={parse_ms:.1f} total_ms={total_ms:.1f}"
+            )
             self.pending_sessions[session_id] = {
                 "request_json": parse_result.request_json,
                 "messages": [
@@ -176,9 +190,16 @@ class RequestWorkflowService:
                 },
             }
 
+        engine_started = perf_counter()
         engine_output = self.engine.process(parse_result.request_json)
+        engine_ms = (perf_counter() - engine_started) * 1000
         ui_suppliers = self._build_ui_suppliers(engine_output)
         self.pending_sessions.pop(session_id, None)
+        total_ms = (perf_counter() - run_started) * 1000
+        print(
+            f"[workflow.timing] session_id={session_id} stage=completed "
+            f"parser={parse_result.source} parse_ms={parse_ms:.1f} engine_ms={engine_ms:.1f} total_ms={total_ms:.1f}"
+        )
         return {
             "status": "completed",
             "session_id": session_id,
@@ -221,29 +242,28 @@ class RequestWorkflowService:
 
         base_url = os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.ai/v1").rstrip("/")
         model = os.getenv("MOONSHOT_MODEL", "kimik2.5")
-        categories = [
-            {
-                "category_l1": row["category_l1"],
-                "category_l2": row["category_l2"],
-                "typical_unit": row["typical_unit"],
-            }
-            for row in self.categories
-        ]
         system_prompt = (
-            "Convert the user's procurement chat message into a JSON object. "
-            "Return JSON only. Use one of the allowed categories provided. "
-            "Preserve unknown fields as null instead of inventing values. "
-            "Expected keys: category_l1, category_l2, title, quantity, unit_of_measure, "
+            "Convert the user's procurement message into JSON only. "
+            "Do not add prose or markdown. "
+            "Set unknown values to null. "
+            "Use category_l2 from this allowed list only: "
+            f"{self._category_names}. "
+            f"Today's date is {datetime.today().strftime('%Y-%m-%d')}"
+            "Return these keys exactly: "
+            "category_l1, category_l2, title, quantity, unit_of_measure, "
             "budget_amount, currency, required_by_date, country, site, delivery_countries, "
             "preferred_supplier_mentioned, incumbent_supplier, contract_type_requested, "
             "data_residency_constraint, esg_requirement, business_unit, requester_role, "
-            "request_language, scenario_tags. "
-            f"Allowed categories: {json.dumps(categories)}"
+            "request_language, scenario_tags."
         )
-        return self._call_moonshot(base_url, api_key, model, [
+        call_started = perf_counter()
+        result = self._call_moonshot(base_url, api_key, model, [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ])
+        call_ms = (perf_counter() - call_started) * 1000
+        print(f"[moonshot.timing] mode=intake model={model} duration_ms={call_ms:.1f}")
+        return result
 
     def _update_with_moonshot(self, current_request: dict[str, Any], message: str) -> dict[str, Any] | None:
         api_key = os.getenv("MOONSHOT_API_KEY")
@@ -252,26 +272,33 @@ class RequestWorkflowService:
 
         base_url = os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.ai/v1").rstrip("/")
         model = os.getenv("MOONSHOT_MODEL", "kimik2.5")
-        critical_fields = list(self.critical_criteria.keys())
         system_prompt = (
-            "You update an existing procurement request JSON with a user's clarification. "
-            "Return JSON only. Keep all existing fields unless the user clarification changes them. "
-            "Only fill values supported by the clarification or already present in the request. "
-            f"Critical fields that must be preserved or completed when possible: {critical_fields}."
+            "Update an existing procurement request JSON using the user's clarification. "
+            "Return JSON only. "
+            "Keep existing values unless the clarification changes them. "
+            "Do not invent unsupported values. "
+            "Preserve the same response keys as the current request."
         )
         user_prompt = json.dumps({
             "current_request": current_request,
             "user_clarification": message,
         })
-        return self._call_moonshot(base_url, api_key, model, [
+        call_started = perf_counter()
+        result = self._call_moonshot(base_url, api_key, model, [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ])
+        call_ms = (perf_counter() - call_started) * 1000
+        print(f"[moonshot.timing] mode=update model={model} duration_ms={call_ms:.1f}")
+        return result
 
     def _call_moonshot(self, base_url: str, api_key: str, model: str, messages: list[dict[str, str]]) -> dict[str, Any] | None:
         payload = {
             "model": model,
-            "temperature": 0.1,
+            "temperature": 0,
+            "thinking": {
+                "type": "disabled"
+            },
             "response_format": {"type": "json_object"},
             "messages": messages,
         }
@@ -287,16 +314,24 @@ class RequestWorkflowService:
         try:
             with request.urlopen(req, timeout=30) as response:
                 raw = json.loads(response.read().decode("utf-8"))
-        except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError):
-            return None
+        except error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            detail = self._extract_error_message(body) or exc.reason
+            raise MoonshotParserError(f"Moonshot parser request failed with HTTP {exc.code}: {detail}") from exc
+        except error.URLError as exc:
+            raise MoonshotParserError(f"Moonshot parser network error: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise MoonshotParserError("Moonshot parser request timed out.") from exc
+        except json.JSONDecodeError as exc:
+            raise MoonshotParserError("Moonshot parser returned invalid JSON.") from exc
 
         content = raw.get("choices", [{}])[0].get("message", {}).get("content")
         if not isinstance(content, str):
-            return None
+            raise MoonshotParserError("Moonshot parser response did not include message content.")
         try:
             return json.loads(self._strip_json_wrapping(content))
-        except json.JSONDecodeError:
-            return None
+        except json.JSONDecodeError as exc:
+            raise MoonshotParserError("Moonshot parser content was not valid JSON.") from exc
 
     def _strip_json_wrapping(self, content: str) -> str:
         cleaned = content.strip()
@@ -304,6 +339,23 @@ class RequestWorkflowService:
             cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
             cleaned = re.sub(r"```$", "", cleaned).strip()
         return cleaned
+
+    def _extract_error_message(self, body: str) -> str | None:
+        if not body:
+            return None
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError:
+            return body.strip()[:200]
+        error_obj = parsed.get("error")
+        if isinstance(error_obj, dict):
+            message = error_obj.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+        message = parsed.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        return body.strip()[:200]
 
     def _normalise_request(
         self,
@@ -392,7 +444,7 @@ class RequestWorkflowService:
                 examples = ", ".join(criteria["values"][:5])
                 prompts.append(f"What product are you buying? Use a category such as {examples}.")
             elif field == "country":
-                prompts.append("Which delivery country should I use? Please provide the ISO-2 country code, such as DE, CH, or US.")
+                prompts.append("Which delivery country should I use?")
             elif field == "quantity":
                 prompts.append("How many units do you need?")
             elif field == "budget_amount":
@@ -508,10 +560,15 @@ class RequestWorkflowService:
     def _build_notifications(self, engine_output: dict[str, Any]) -> list[dict[str, Any]]:
         notifications: list[dict[str, Any]] = []
         for index, escalation in enumerate(engine_output.get("escalations", []), start=1):
+            approver = escalation.get("escalate_to")
+            reason = escalation.get("trigger", "Escalation raised")
             notifications.append({
                 "id": index,
-                "type": "pending" if escalation.get("blocking") else "approved",
-                "message": escalation.get("trigger", "Escalation raised"),
+                "type": "rejected" if escalation.get("blocking") else "pending",
+                "message": (
+                    f"{'Blocked' if escalation.get('blocking') else 'Approval required'}: {reason}"
+                    + (f" Routed to {approver}." if approver else "")
+                ),
                 "time": escalation.get("rule", "policy"),
             })
         base = len(notifications)
@@ -519,7 +576,10 @@ class RequestWorkflowService:
             notifications.append({
                 "id": base + offset,
                 "type": "rejected" if issue.get("severity") == "critical" else "pending",
-                "message": issue.get("description", "Validation issue detected"),
+                "message": (
+                    f"{issue.get('description', 'Validation issue detected')} "
+                    f"Action: {issue.get('action_required', 'Review required.')}"
+                ),
                 "time": issue.get("severity", "issue"),
             })
         return notifications
