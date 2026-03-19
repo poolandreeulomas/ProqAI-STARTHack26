@@ -1,0 +1,223 @@
+{
+  "schema_version": "1.0",
+  "description": "Supplier Engine Request Schema",
+  "fields": {
+    "critical": {
+      "_note": "Engine cannot function without these",
+      "category_l2": {
+        "type": "string",
+        "required": true,
+        "values": [
+          "Laptops",
+          "Cloud Compute",
+          "Office Chairs",
+          "Cloud Storage",
+          "Monitors",
+          "Docking Stations",
+          "Cloud Security Services",
+          "Cybersecurity Advisory",
+          "Data Engineering Services",
+          "Cloud Architecture Consulting",
+          "IT Project Management Services",
+          "Managed Cloud Platform Services",
+          "Marketing Analytics Services",
+          "Content Production Services",
+          "Influencer Campaign Management",
+          "Meeting Room Furniture",
+          "Desktop Workstations",
+          "Mobile Workstations",
+          "Accessories Bundles",
+          "Cloud Networking"
+        ],
+        "additional_values_note": "~10 more values exist"
+      },
+      "country": {
+        "type": "string",
+        "format": "ISO-2",
+        "required": true,
+        "values": [
+          "AT", "AU", "BE", "BR", "CA", "CH", "DE", "ES", "FR",
+          "IN", "IT", "JP", "MX", "NL", "PL", "SG", "UAE", "US", "ZA"
+        ]
+      },
+      "quantity": {
+        "type": "number",
+        "required": true,
+        "examples": [1, 12, 500, 1000, 10000, 1000000]
+      },
+      "budget_amount": {
+        "type": "float",
+        "required": true,
+        "currency": "EUR",
+        "examples": [1400.0, 102000.0, 1320000.0]
+      },
+      "currency": {
+        "type": "string",
+        "required": true,
+        "values": ["EUR", "CHF", "USD"]
+      }
+    },
+    "important": {
+      "_note": "Affects policy checks and escalation routing",
+      "data_residency_constraint": {
+        "type": "boolean",
+        "required": false
+      },
+      "esg_requirement": {
+        "type": "boolean",
+        "required": false
+      },
+      "required_by_date": {
+        "type": "string",
+        "format": "ISO-8601 date (YYYY-MM-DD)",
+        "required": false,
+        "example": "2026-02-14"
+      },
+      "delivery_countries": {
+        "type": "array",
+        "items": "string (ISO-2)",
+        "required": false,
+        "example": ["DE", "AT", "CH"]
+      },
+      "preferred_supplier_mentioned": {
+        "type": "string | null",
+        "required": false,
+        "examples": ["AWS Enterprise EMEA", "Dell Enterprise Europe"]
+      },
+      "incumbent_supplier": {
+        "type": "string | null",
+        "required": false,
+        "examples": ["Azure Enterprise", "HP Enterprise Devices"]
+      },
+      "requester_role": {
+        "type": "string",
+        "required": false,
+        "values": [
+          "Category Buyer",
+          "IT Manager",
+          "Infrastructure Manager",
+          "Marketing Lead",
+          "Office Manager",
+          "Security Lead",
+          "Workplace Lead",
+          "Data Platform Lead"
+        ]
+      },
+      "requester_id": {
+        "type": "string",
+        "required": false,
+        "format": "U0004 - U0043",
+        "note": "Used for approval routing lookup"
+      }
+    },
+    "optional": {
+      "_note": "Enriches output or triggers minor logic",
+      "category_l1": {
+        "type": "string",
+        "required": false,
+        "values": ["IT", "Facilities", "Marketing", "Professional Services"]
+      },
+      "unit_of_measure": {
+        "type": "string",
+        "required": false,
+        "values": [
+          "device", "unit", "units", "set", "consulting_day", "days",
+          "instance_hour", "GB", "TB_month", "GB_transfer",
+          "monthly_subscription", "seat_license", "campaign",
+          "campaigns", "project", "months"
+        ]
+      },
+      "contract_type_requested": {
+        "type": "string",
+        "required": false,
+        "values": [
+          "purchase",
+          "purchase_order",
+          "framework call-off",
+          "contract",
+          "statement_of_work"
+        ]
+      },
+      "title": {
+        "type": "string",
+        "required": false,
+        "format": "free text"
+      },
+      "request_text": {
+        "type": "string",
+        "required": false,
+        "format": "free text (natural language description)"
+      },
+      "business_unit": {
+        "type": "string",
+        "required": false,
+        "values": [
+          "Global IT",
+          "Digital Workplace",
+          "Infrastructure",
+          "Cybersecurity",
+          "Data & Analytics",
+          "Marketing",
+          "Facilities",
+          "Corporate Services",
+          "Regional IT EU",
+          "Regional IT APAC",
+          "Regional IT Americas",
+          "Regional IT MEA"
+        ]
+      },
+      "site": {
+        "type": "string",
+        "required": false,
+        "format": "city name",
+        "examples": ["Berlin", "Amsterdam", "Singapore"]
+      },
+      "submitted_for_id": {
+        "type": "string",
+        "required": false,
+        "format": "U0001 - U0043"
+      },
+      "scenario_tags": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "values": [
+          ["standard"],
+          ["lead_time"],
+          ["missing_info"],
+          ["contradictory"],
+          ["threshold"],
+          ["capacity"],
+          ["restricted"],
+          ["multi_country"],
+          ["multilingual"],
+          ["multilingual", "multi_country"]
+        ]
+      }
+    },
+    "ignored": {
+      "_note": "Not used by the engine",
+      "request_id": {
+        "type": "string",
+        "format": "REQ-000001 - REQ-000304"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "ISO-8601 datetime",
+        "example": "2026-01-01T15:59:00Z"
+      },
+      "status": {
+        "type": "string",
+        "values": ["new", "submitted", "pending_review"]
+      },
+      "request_channel": {
+        "type": "string",
+        "values": ["portal", "email", "teams"]
+      },
+      "request_language": {
+        "type": "string",
+        "values": ["en", "de", "fr", "es", "pt", "ja"]
+      }
+    }
+  }
+}
