@@ -3,8 +3,8 @@ How to run:
 Frontend and backend are executed separately (in 2 separate shells):
 1. Frontend:
   ```
-cd frontend
-npm run dev
+  cd frontend
+  npm run dev
   ```
 
 2. Backend:
