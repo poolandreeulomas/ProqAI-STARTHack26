@@ -24,7 +24,7 @@ from typing import Any
 # Constants / helpers
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parent / "data/data"
 
 # ISO-2 country code → pricing region used in pricing.csv
 # Distinct region values in pricing.csv: EU, CH, Americas, APAC, MEA
