@@ -24,7 +24,7 @@ from typing import Any
 # Constants / helpers
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(__file__).parent.parent / "data/data"
+DATA_DIR = Path(__file__).parent / "data"
 
 # ISO-2 country code → pricing region used in pricing.csv
 # Distinct region values in pricing.csv: EU, CH, Americas, APAC, MEA
@@ -69,14 +69,16 @@ class SupplierEngine:
 
     def __init__(self, data_dir: Path = DATA_DIR):
         self.suppliers = _load_csv(data_dir / "suppliers.csv")
-        self.pricing   = _load_csv(data_dir / "pricing.csv")
-        self.policies  = _load_json(data_dir / "policies.json")
-        self.awards    = _load_csv(data_dir / "historical_awards.csv")
-        self._today    = date.today()
+        self.pricing = _load_csv(data_dir / "pricing.csv")
+        self.policies = _load_json(data_dir / "policies.json")
+        self.awards = _load_csv(data_dir / "historical_awards.csv")
+        self._today = date.today()
 
         # Pre-built policy lookup sets
-        self._preferred_set  = self._build_preferred_set()   # {(supplier_id, category_l2)}
-        self._restricted_map = self._build_restricted_map()  # {(supplier_id, category_l2): [scope]}
+        # {(supplier_id, category_l2)}
+        self._preferred_set = self._build_preferred_set()
+        # {(supplier_id, category_l2): [scope]}
+        self._restricted_map = self._build_restricted_map()
 
         # Load fitted scoring weights if available, else fall back to defaults
         weights_path = Path(__file__).parent / "scoring_weights.json"
@@ -110,20 +112,21 @@ class SupplierEngine:
         today = self._today
 
         # Unpack the most-used fields once
-        req_id      = request["request_id"]
-        cat_l1      = request["category_l1"]
-        cat_l2      = request["category_l2"]
-        currency    = request["currency"]
-        budget      = request.get("budget_amount")
-        quantity    = request.get("quantity")
+        req_id = request["request_id"]
+        cat_l1 = request["category_l1"]
+        cat_l2 = request["category_l2"]
+        currency = request["currency"]
+        budget = request.get("budget_amount")
+        quantity = request.get("quantity")
         required_by = request.get("required_by_date")
-        delivery_countries = request.get("delivery_countries") or [request["country"]]
-        primary_country    = delivery_countries[0] if delivery_countries else request["country"]
-        data_residency     = request.get("data_residency_constraint", False)
-        esg_req            = request.get("esg_requirement", False)
+        delivery_countries = request.get("delivery_countries") or [
+            request["country"]]
+        primary_country = delivery_countries[0] if delivery_countries else request["country"]
+        data_residency = request.get("data_residency_constraint", False)
+        esg_req = request.get("esg_requirement", False)
         preferred_mentioned = request.get("preferred_supplier_mentioned")
-        incumbent           = request.get("incumbent_supplier")
-        region              = country_to_region(primary_country)
+        incumbent = request.get("incumbent_supplier")
+        region = country_to_region(primary_country)
 
         # ── 1. Validate ────────────────────────────────────────────────
         validation_issues, escalations = self._validate(request, today)
@@ -174,7 +177,8 @@ class SupplierEngine:
         # Overage ≤ 20%  → validation warning only (recommendation can still proceed).
         # Overage  > 20% → blocking escalation requiring requester clarification.
         _BUDGET_TOLERANCE = 0.20
-        priced_with_price = [s for s in priced if s.get("pricing") and s["pricing"].get("unit_price")]
+        priced_with_price = [s for s in priced if s.get(
+            "pricing") and s["pricing"].get("unit_price")]
         if budget is not None and priced_with_price:
             min_total = min(
                 float(s["pricing"]["unit_price"]) * (quantity or 1)
@@ -216,8 +220,8 @@ class SupplierEngine:
             if s.get("pricing") and s["pricing"].get("expedited_lead_time_days")
         ]
         if required_by and priced_with_lead:
-            req_date   = date.fromisoformat(required_by)
-            days_left  = (req_date - today).days
+            req_date = date.fromisoformat(required_by)
+            days_left = (req_date - today).days
             all_infeasible = all(
                 int(s["pricing"]["expedited_lead_time_days"]) > days_left
                 for s in priced_with_lead
@@ -327,8 +331,8 @@ class SupplierEngine:
 
         required_by = req.get("required_by_date")
         if required_by:
-            req_date   = date.fromisoformat(required_by)
-            days_left  = (req_date - today).days
+            req_date = date.fromisoformat(required_by)
+            days_left = (req_date - today).days
             if days_left < 0:
                 add_issue(
                     "critical", "deadline_passed",
@@ -382,7 +386,8 @@ class SupplierEngine:
                 continue
 
             # Delivery country coverage (service_regions is semicolon-delimited)
-            service_regions = {r.strip() for r in row.get("service_regions", "").split(";") if r.strip()}
+            service_regions = {r.strip() for r in row.get(
+                "service_regions", "").split(";") if r.strip()}
             if not any(c in service_regions for c in delivery_countries):
                 excluded.append({
                     "supplier_id": sup_id,
@@ -458,9 +463,11 @@ class SupplierEngine:
             violations: list[str] = []
 
             if row.get("contract_status", "").lower() != "active":
-                violations.append(f"contract_status={row.get('contract_status')}")
+                violations.append(
+                    f"contract_status={row.get('contract_status')}")
 
-            service_regions = {r.strip() for r in row.get("service_regions", "").split(";") if r.strip()}
+            service_regions = {r.strip() for r in row.get(
+                "service_regions", "").split(";") if r.strip()}
             if not any(c in service_regions for c in delivery_countries):
                 violations.append(f"does not cover {delivery_countries}")
 
@@ -475,7 +482,8 @@ class SupplierEngine:
             if not violations:
                 continue  # passed all filters — not a best-bad candidate
 
-            pricing_row = self._get_pricing(sup_id, cat_l1, cat_l2, region, currency, quantity)
+            pricing_row = self._get_pricing(
+                sup_id, cat_l1, cat_l2, region, currency, quantity)
             if pricing_row is None:
                 violations.append("no pricing row for this region/currency")
 
@@ -487,7 +495,8 @@ class SupplierEngine:
             })
 
         # Sort: fewest violations first, then by risk score ascending
-        candidates.sort(key=lambda s: (len(s["violation_reasons"]), int(s.get("risk_score") or 99)))
+        candidates.sort(key=lambda s: (
+            len(s["violation_reasons"]), int(s.get("risk_score") or 99)))
         return candidates
 
     # ------------------------------------------------------------------
@@ -584,11 +593,13 @@ class SupplierEngine:
         preferred_eval = None
         if preferred_mentioned:
             matched = next(
-                (s for s in priced if preferred_mentioned.lower() in s["supplier_name"].lower()),
+                (s for s in priced if preferred_mentioned.lower()
+                 in s["supplier_name"].lower()),
                 None,
             )
             if matched:
-                is_pref = (matched["supplier_id"], cat_l2) in self._preferred_set
+                is_pref = (matched["supplier_id"],
+                           cat_l2) in self._preferred_set
                 preferred_eval = {
                     "supplier": matched["supplier_name"],
                     "status": "eligible",
@@ -621,7 +632,8 @@ class SupplierEngine:
 
         # AT-driven quote-count escalation
         if at:
-            quotes_required = at.get("min_supplier_quotes") or at.get("quotes_required") or 1
+            quotes_required = at.get("min_supplier_quotes") or at.get(
+                "quotes_required") or 1
             if len(priced) < quotes_required:
                 escalations.append({
                     "escalation_id": f"ESC-{len(escalations)+1:03d}",
@@ -631,7 +643,8 @@ class SupplierEngine:
                         f"but only {len(priced)} eligible supplier(s) found."
                     ),
                     "escalate_to": (
-                        (at.get("deviation_approval_required_from") or ["Procurement Manager"])[0]
+                        (at.get("deviation_approval_required_from")
+                         or ["Procurement Manager"])[0]
                     ),
                     "blocking": False,
                 })
@@ -642,7 +655,8 @@ class SupplierEngine:
             if cr["category_l1"] == cat_l1 and cr["category_l2"] == cat_l2
         ]
         for cr in cat_rules:
-            self._apply_category_rule(cr, req, quantity, ref_value, escalations)
+            self._apply_category_rule(
+                cr, req, quantity, ref_value, escalations)
 
         # Geography rules
         geo_rules = [
@@ -656,11 +670,13 @@ class SupplierEngine:
                 "rule_applied": at["threshold_id"] if at else "N/A",
                 "basis": f"Estimated contract value {currency} {ref_value:,.2f}",
                 "quotes_required": (
-                    (at.get("min_supplier_quotes") or at.get("quotes_required") or 1) if at else 1
+                    (at.get("min_supplier_quotes") or at.get(
+                        "quotes_required") or 1) if at else 1
                 ),
                 "approvers": at.get("managed_by") or at.get("approvers") or [] if at else [],
                 "deviation_approval": (
-                    (at.get("deviation_approval_required_from") or [None])[0] if at else None
+                    (at.get("deviation_approval_required_from")
+                     or [None])[0] if at else None
                 ),
             },
             "preferred_supplier": preferred_eval,
@@ -695,7 +711,7 @@ class SupplierEngine:
 
         triggers: dict[str, tuple[bool, str]] = {
             "mandatory_comparison":   (ref_value > 100_000,             "Procurement Manager"),
-            "engineering_spec_review":(bool(quantity and quantity > 50), "Engineering / CAD Lead"),
+            "engineering_spec_review": (bool(quantity and quantity > 50), "Engineering / CAD Lead"),
             "security_review":        (ref_value > 250_000,             "Security Architecture Team"),
             "cv_review":              (bool(quantity and quantity > 60), "Category Manager"),
             "brand_safety":           (True,                             "Marketing Governance Lead"),
@@ -703,7 +719,8 @@ class SupplierEngine:
             "design_signoff":         (True,                             "Business Design Lead"),
             "certification_check":    (True,                             "Category Manager"),
             "performance_baseline":   (True,                             "Category Manager"),
-            "fast_track":             (False,                            ""),  # informational only
+            # informational only
+            "fast_track":             (False,                            ""),
         }
 
         should_trigger, escalate_to = triggers.get(rule_type, (False, ""))
@@ -731,64 +748,80 @@ class SupplierEngine:
         required_by: str | None,
         today: date,
     ) -> list[dict]:
-        req_date  = date.fromisoformat(required_by) if required_by else None
+        req_date = date.fromisoformat(required_by) if required_by else None
         days_left = (req_date - today).days if req_date else None
         qty = quantity or 1
 
         scored: list[tuple[float, dict]] = []
 
         for sup in priced:
-            p          = sup.get("pricing") or {}
-            sup_id     = sup["supplier_id"]
-            name       = sup["supplier_name"]
+            p = sup.get("pricing") or {}
+            sup_id = sup["supplier_id"]
+            name = sup["supplier_name"]
             # Best-bad suppliers may have no pricing — use sentinel values
-            unit_price = float(p["unit_price"]) if p.get("unit_price") else None
-            total      = round(unit_price * qty, 2) if unit_price is not None else None
-            std_lead   = int(p["standard_lead_time_days"]) if p.get("standard_lead_time_days") else None
-            exp_lead   = int(p["expedited_lead_time_days"]) if p.get("expedited_lead_time_days") else None
-            exp_unit   = float(p["expedited_unit_price"]) if p.get("expedited_unit_price") else None
-            exp_total  = round(exp_unit * qty, 2) if exp_unit is not None else None
-            quality    = int(sup.get("quality_score", 50))
-            risk       = int(sup.get("risk_score",    50))
-            esg        = int(sup.get("esg_score",     50))
+            unit_price = float(p["unit_price"]) if p.get(
+                "unit_price") else None
+            total = round(unit_price * qty,
+                          2) if unit_price is not None else None
+            std_lead = int(p["standard_lead_time_days"]) if p.get(
+                "standard_lead_time_days") else None
+            exp_lead = int(p["expedited_lead_time_days"]) if p.get(
+                "expedited_lead_time_days") else None
+            exp_unit = float(p["expedited_unit_price"]) if p.get(
+                "expedited_unit_price") else None
+            exp_total = round(
+                exp_unit * qty, 2) if exp_unit is not None else None
+            quality = int(sup.get("quality_score", 50))
+            risk = int(sup.get("risk_score",    50))
+            esg = int(sup.get("esg_score",     50))
 
             is_preferred = (sup_id, sup["category_l2"]) in self._preferred_set
-            is_incumbent = bool(incumbent and incumbent.lower() in name.lower())
-            is_mentioned = bool(preferred_mentioned and preferred_mentioned.lower() in name.lower())
-            over_budget  = budget is not None and total is not None and total > budget
+            is_incumbent = bool(
+                incumbent and incumbent.lower() in name.lower())
+            is_mentioned = bool(
+                preferred_mentioned and preferred_mentioned.lower() in name.lower())
+            over_budget = budget is not None and total is not None and total > budget
 
             # Scoring weights fitted by pairwise logistic regression against
             # historical_awards.csv (see fit_scoring_weights.py).
             # Lower score = better rank.
-            w     = self._weights
-            s     = self._WEIGHT_SCALE
+            w = self._weights
+            s = self._WEIGHT_SCALE
             esg_w = w["esg_score"] * (2.0 if esg_req else 1.0)
 
             violation_reasons = sup.get("violation_reasons", [])
             score = (
-                + risk              * w["risk_score"]    * s   # higher risk  → worse
-                - quality           * w["quality_score"] * s   # higher qual  → better
-                - esg               * esg_w              * s   # higher esg   → better
-                - float(is_preferred) * w["is_preferred"]  * s
-                - float(is_incumbent) * w["is_incumbent"]  * s
-                - float(is_mentioned) * w["is_mentioned"]  * s
-                + len(violation_reasons) * 1_000_000          # best-bad always last
+                + risk * w["risk_score"] * s   # higher risk  → worse
+                - quality * w["quality_score"] * s   # higher qual  → better
+                - esg * esg_w * s   # higher esg   → better
+                - float(is_preferred) * w["is_preferred"] * s
+                - float(is_incumbent) * w["is_incumbent"] * s
+                - float(is_mentioned) * w["is_mentioned"] * s
+                # best-bad always last
+                + len(violation_reasons) * 1_000_000
             )
 
             # Build human-readable note
             notes: list[str] = []
             if violation_reasons:
-                notes.append(f"[BEST-EFFORT — policy violations: {'; '.join(violation_reasons)}]")
-            if is_preferred: notes.append("Preferred supplier.")
-            if is_incumbent: notes.append("Incumbent supplier.")
-            if is_mentioned: notes.append("Requester's stated preference.")
+                notes.append(
+                    f"[BEST-EFFORT — policy violations: {'; '.join(violation_reasons)}]")
+            if is_preferred:
+                notes.append("Preferred supplier.")
+            if is_incumbent:
+                notes.append("Incumbent supplier.")
+            if is_mentioned:
+                notes.append("Requester's stated preference.")
             if over_budget:
-                notes.append(f"Total {total:,.2f} exceeds budget {budget:,.2f}.")
+                notes.append(
+                    f"Total {total:,.2f} exceeds budget {budget:,.2f}.")
             if days_left is not None and std_lead is not None and exp_lead is not None:
                 if std_lead <= days_left:
-                    notes.append(f"Standard lead time {std_lead}d meets deadline.")
+                    notes.append(
+                        f"Standard lead time {std_lead}d meets deadline.")
                 elif exp_lead <= days_left:
-                    notes.append(f"Expedited option ({exp_lead}d) meets deadline; standard ({std_lead}d) does not.")
+                    notes.append(
+                        f"Expedited option ({exp_lead}d) meets deadline; standard ({std_lead}d) does not.")
                 else:
                     notes.append(
                         f"Both standard ({std_lead}d) and expedited ({exp_lead}d) lead times "
@@ -841,22 +874,26 @@ class SupplierEngine:
         if hard_blockers:
             top = shortlist[0] if shortlist else None
             min_total = min(
-                (s["total_price_eur"] for s in shortlist if s["total_price_eur"] is not None),
+                (s["total_price_eur"]
+                 for s in shortlist if s["total_price_eur"] is not None),
                 default=None,
             )
 
             # ER-001: missing/insufficient requester input — award is possible once provided.
             # ER-004: no compliant suppliers or infeasible lead time — truly impossible.
             # If any ER-004 is present, the request cannot proceed regardless of clarification.
-            truly_impossible = [e for e in hard_blockers if e.get("rule") == "ER-004"]
-            clarification_needed = [e for e in hard_blockers if e.get("rule") == "ER-001"]
+            truly_impossible = [
+                e for e in hard_blockers if e.get("rule") == "ER-004"]
+            clarification_needed = [
+                e for e in hard_blockers if e.get("rule") == "ER-001"]
 
             if truly_impossible:
                 return {
                     "status": "cannot_proceed",
                     "reason": (
                         f"{len(truly_impossible)} infeasibility issue(s) cannot be resolved by requester input: "
-                        + "; ".join(e["trigger"][:80] for e in truly_impossible)
+                        + "; ".join(e["trigger"][:80]
+                                    for e in truly_impossible)
                     ),
                     "preferred_supplier_if_resolved": top["supplier_name"] if top else None,
                     "preferred_supplier_rationale": top["recommendation_note"] if top else None,
@@ -865,7 +902,8 @@ class SupplierEngine:
 
             # Only ER-001 blockers — award is unblocked once requester provides the missing input.
             clarifications_needed = [
-                {"field": e["trigger"], "rule": e["rule"], "escalate_to": e["escalate_to"]}
+                {"field": e["trigger"], "rule": e["rule"],
+                    "escalate_to": e["escalate_to"]}
                 for e in clarification_needed
             ]
             return {
@@ -933,9 +971,9 @@ class SupplierEngine:
         excluded: list[dict],
         policy_eval: dict,
     ) -> dict:
-        cat_l2   = req["category_l2"]
-        country  = req.get("country", "")
-        hist     = [
+        cat_l2 = req["category_l2"]
+        country = req.get("country", "")
+        hist = [
             a for a in self.awards
             if a.get("category_l2") == cat_l2 and a.get("country") == country
         ]
@@ -973,13 +1011,13 @@ class SupplierEngine:
 # ---------------------------------------------------------------------------
 
 def process_all(data_dir: Path = DATA_DIR) -> list[dict]:
-    engine   = SupplierEngine(data_dir)
+    engine = SupplierEngine(data_dir)
     requests = _load_json(data_dir / "requests.json")
     return [engine.process(req) for req in requests]
 
 
 if __name__ == "__main__":
-    results  = process_all()
+    results = process_all()
     out_path = Path(__file__).parent / "outputs.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, default=str)
