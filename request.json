@@ -1,0 +1,31 @@
+{
+  "request_id": "REQ-53643D18",
+  "created_at": "2026-03-19T11:53:56.004440+00:00",
+  "request_channel": "frontend_chat",
+  "request_language": "en",
+  "business_unit": "Frontend Intake",
+  "country": "CH",
+  "site": "Zurich",
+  "requester_id": "frontend-user",
+  "requester_role": "Requester",
+  "submitted_for_id": "frontend-user",
+  "category_l1": "IT",
+  "category_l2": "Laptops",
+  "title": "Laptops procurement request",
+  "request_text": "laptops\nFollow-up: zurich\nFollow-up: 200k euro\nFollow-up: 500\nFollow-up: quantity: 500",
+  "currency": "EUR",
+  "budget_amount": 200000.0,
+  "quantity": 500,
+  "unit_of_measure": "device",
+  "required_by_date": null,
+  "preferred_supplier_mentioned": null,
+  "incumbent_supplier": null,
+  "contract_type_requested": "purchase",
+  "delivery_countries": [
+    "CH"
+  ],
+  "data_residency_constraint": false,
+  "esg_requirement": false,
+  "status": "pending_review",
+  "scenario_tags": []
+}
