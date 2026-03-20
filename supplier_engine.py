@@ -750,7 +750,7 @@ class SupplierEngine:
             candidates = [p for p in self.pricing if _match(p, "EU")]
         if not candidates and region == "CH" and currency == "CHF":
             candidates = [
-                p for p in self.pricing
+                dict(p) for p in self.pricing
                 if (
                     p["supplier_id"] == supplier_id
                     and _matches_category_scope(p, cat_l1, cat_l2)
@@ -768,7 +768,7 @@ class SupplierEngine:
         # currency and quantity tier still line up.
         if not candidates and allow_region_fallback:
             candidates = [
-                p for p in self.pricing
+                dict(p) for p in self.pricing
                 if (
                     p["supplier_id"] == supplier_id
                     and _matches_category_scope(p, cat_l1, cat_l2)
