@@ -1,6 +1,6 @@
 # ProQAi
 
-![Demo][assets/SH26_Demo.gif]
+![Demo](assets/SH26_Demo.gif)
 
 Conversational procurement that turns natural-language requests into policy-compliant supplier recommendations and auditable order decisions.
 
