@@ -1,5 +1,7 @@
 # ProQAi
 
+![Demo][assets/SH26_Demo.gif]
+
 Conversational procurement that turns natural-language requests into policy-compliant supplier recommendations and auditable order decisions.
 
 Deployed version: https://proqai.shop/
@@ -10,7 +12,7 @@ Developed by:
   - Tonio Hasler (Finance & Physics, Frankfurt and Goethe)
   - Pol Andreu (Telecom & AI, UPC and TU Wien)
 
-  
+
 ## Problem
 
 32 million hours are lost every year in procurement friction. That is 46 human lifetimes, or roughly 3,650 years spent on forms, approvals, and system navigation instead of productive work.
